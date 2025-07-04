@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+.hover-grey:hover {
+  background-color: #e5e7eb !important;
+}
+
+.dark .hover-grey:hover {
+  background-color: #4b5563 !important;
+}
+
+.sidebar {
+  padding: 1rem 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-right: 0.01rem solid grey;
+}
+
+.search {
+  padding: 0 1rem;
+}
+
+.ConversationList {
+  padding: 1rem;
+  height: max-content;
+  flex: 1;
+  overflow: auto;
+}
+
+.status {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  /* right: 100%; */
+  /* width: ; */
+}
+
+.system {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}

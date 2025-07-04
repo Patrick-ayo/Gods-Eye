@@ -1,0 +1,29 @@
+{
+  "name": "gods-eye-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Gods Eye application",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "firebase-admin": "^12.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "express",
+    "api",
+    "backend",
+    "gods-eye"
+  ],
+  "author": "Gods Eye Team",
+  "license": "MIT"
+}

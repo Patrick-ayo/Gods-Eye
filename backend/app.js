@@ -1,6 +1,19 @@
 // Load environment variables
 require("dotenv").config();
 
+// Import logging system
+const {
+  logger,
+  createComponentLogger,
+  logAppStart,
+  logAppShutdown,
+  logUSBEvent,
+  requestLogger,
+  errorLogger,
+  logPerformance,
+  logDatabaseOperation
+} = require('./utils/logger');
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -14,6 +27,11 @@ const Tesseract = require('tesseract.js');
 const axios = require('axios');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+
+// Create component loggers
+const appLogger = createComponentLogger('APP');
+const apiLogger = createComponentLogger('API');
+const securityLogger = createComponentLogger('SECURITY');
 
 // Initialize Simple USB Monitor
 const SimpleUSBMonitor = require("./simple-usb-monitor");
@@ -31,6 +49,7 @@ const imageRoutes = require("./routes/imageRoutes");
 // Middleware
 app.use(helmet());
 app.use(cors());
+app.use(requestLogger); // Custom request logging
 app.use(morgan("combined"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -152,8 +171,10 @@ app.get("/api/status", (req, res) => {
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
 app.use("/api/security", require("./routes/securityRoutes"));
+app.use("/api/logs", require("./routes/logRoutes"));
 
 // Error handling middleware
+app.use(errorLogger); // Custom error logging
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({
@@ -172,9 +193,11 @@ app.use("*", (req, res) => {
 
 // Start server
 app.listen(PORT, async () => {
-  console.log(`🚀 Gods Eye Backend server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`📈 Status: http://localhost:${PORT}/api/status`);
+  // Log application startup
+  logAppStart();
+  appLogger.info(`🚀 Gods Eye Backend server running on port ${PORT}`);
+  appLogger.info(`📊 Health check: http://localhost:${PORT}/api/health`);
+  appLogger.info(`📈 Status: http://localhost:${PORT}/api/status`);
   
   // Initialize and start USB monitoring
   try {
@@ -184,16 +207,21 @@ app.listen(PORT, async () => {
     });
     
     await usbMonitor.startMonitoring();
-    console.log('🔒 USB Security Monitor initialized and active');
+    securityLogger.info('🔒 USB Security Monitor initialized and active');
     
     // Handle USB storage detection
     usbMonitor.on('usbStorageDetected', (drive) => {
-      console.log('🚨 USB STORAGE DETECTED - SHUTTING DOWN APPLICATION!');
-      console.log('❌ Security violation: USB storage device connected');
-      console.log(`   Drive: ${drive.DeviceID}, Size: ${drive.Size ? Math.round(drive.Size / 1024 / 1024 / 1024 * 100) / 100 + ' GB' : 'Unknown'}`);
+      const deviceInfo = {
+        DeviceID: drive.DeviceID,
+        Size: drive.Size ? Math.round(drive.Size / 1024 / 1024 / 1024 * 100) / 100 + ' GB' : 'Unknown'
+      };
+      
+      securityLogger.security('🚨 USB STORAGE DETECTED - SHUTTING DOWN APPLICATION!', deviceInfo);
+      logUSBEvent('USB_STORAGE_DETECTED', deviceInfo);
       
       // Shutdown the application
       setTimeout(() => {
+        logAppShutdown('Security violation: USB storage detected');
         process.exit(1);
       }, 1000);
     });
@@ -205,13 +233,28 @@ app.listen(PORT, async () => {
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down gracefully");
+  appLogger.info("SIGTERM received, shutting down gracefully");
+  logAppShutdown('SIGTERM signal received');
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  console.log("SIGINT received, shutting down gracefully");
+  appLogger.info("SIGINT received, shutting down gracefully");
+  logAppShutdown('SIGINT signal received');
   process.exit(0);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  appLogger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
+  logAppShutdown('Uncaught exception');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  appLogger.error('Unhandled Rejection:', { reason, promise });
+  logAppShutdown('Unhandled rejection');
+  process.exit(1);
 });
 
 app.use("/api/test", testInsertRoute);

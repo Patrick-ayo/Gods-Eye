@@ -19,6 +19,16 @@ router.post("/upload", upload.single("image"), async (req, res) => {
     // Delete local file after upload
     fs.unlinkSync(filePath);
 
+    // Save to MongoDB with classification
+    const image = new Image({
+      title: req.body.title || "Untitled",
+      imageUrl: result.secure_url,
+      isScreenshot: req.body.type === "screenshot",
+      isWebcam: req.body.type === "webcam",
+      classifiedBy: "manual",
+    });
+    await image.save();
+
     res.json({
       success: true,
       url: result.secure_url,

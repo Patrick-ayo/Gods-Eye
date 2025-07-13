@@ -68,14 +68,15 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
       
       if (response.ok) {
         const data = await response.json();
-        setIsConfidential(data.result === "CONFIDENTIAL");
+        // Treat anything except 'SAFE' as confidential (strict policy)
+        setIsConfidential(data.result !== "SAFE");
       } else {
         console.error("Hazard detection failed:", response.status);
-        setIsConfidential(false);
+        setIsConfidential(true); // Strict: treat as confidential on error
       }
     } catch (error) {
       console.error("Error detecting hazard:", error);
-      setIsConfidential(false);
+      setIsConfidential(true); // Strict: treat as confidential on error
     } finally {
       setHazardDetectionLoading(false);
     }

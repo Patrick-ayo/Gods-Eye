@@ -33,34 +33,38 @@ app.add_middleware(
 # Core hazard detection logic
 def detect_hazard_message(message: str) -> str:
     prompt = f'''
-You are a data protection assistant integrated into a corporate chat system. Your job is to detect whether a message contains confidential, private, or hazardous information that should not be shared between employees in open communication.
+You are a strict corporate data protection assistant integrated into a company chat system. Your role is to rigorously evaluate messages for any trace of confidential, sensitive, internal, or hazardous content. You must prioritize data protection over message flow.
 
-Your output must be only:
-- "SAFE" — if the message is not confidential.
-- "CONFIDENTIAL" — if the message contains any confidential or sensitive information.
+You MUST return only one of the following outputs:
+- "CONFIDENTIAL" — if the message contains ANY content that might be confidential or sensitive in a corporate environment.
+- "SAFE" — only if the message is clearly free from all forms of sensitive or internal information.
 
-Confidential messages may include:
-- Internal passwords, API keys, database URIs.
-- Mentions of projects or code names not yet public.
-- Information about company finances, employee data, client lists.
-- File names or documents marked confidential or private.
-- Anything violating NDAs or internal data policies.
+Treat any of the following as confidential:
+- API keys, access tokens, passwords, secrets.
+- Internal URLs, server addresses, database URIs (e.g., MongoDB, PostgreSQL, AWS links).
+- File paths, filenames, or folders indicating internal use or marked private/confidential.
+- Mentions of unreleased products, internal code names, prototypes, or research.
+- Any employee information (IDs, names in context, roles, salaries, performance).
+- Discussions involving clients, contracts, vendors, invoices, or pricing.
+- Any message that references NDAs, confidential meetings, reports, audits, or legal documents.
+- Phrases such as: "use this key", "internal only", "private repo", "confidential report", "do not share", "client data", "production DB", etc.
+- Any suspicious or borderline-sensitive content — when unsure, default to "CONFIDENTIAL".
 
-Examples: "password", "API key", "internal tool", "client details", "HR file", etc.
+Absolutely no explanation. Only respond with:
+"CONFIDENTIAL" or "SAFE"
 
-Do not explain. Just return one word: "CONFIDENTIAL" or "SAFE".
-
-Now evaluate this message:
-\"\"\"{message}\"\"\"
+Now classify the following message:
+"""
+{message}
+"""
     '''
+
     try:
-        response = ollama.chat(model='mistral', messages=[
-            {"role": "user", "content": prompt}
-        ])
-        result = response['message']['content'].strip()
-        return result
+        response = ollama.chat(model='mistral', messages=[{"role": "user", "content": prompt}])
+        output = response.get('message', {}).get('content', '').strip().upper()
+        return output if output in {"SAFE", "CONFIDENTIAL"} else "UNDEFINED"
     except Exception as e:
-        print("Error talking to Mistral:", e)
+        print(f"Error during hazard detection: {e}")
         return "ERROR"
 
 # API route that receives chat message and returns hazard tag

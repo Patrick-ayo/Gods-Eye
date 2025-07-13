@@ -1,37 +1,19 @@
 // Load environment variables
 require("dotenv").config();
 
-// Import logging system
-const {
-  logger,
-  createComponentLogger,
-  logAppStart,
-  logAppShutdown,
-  logUSBEvent,
-  requestLogger,
-  errorLogger,
-  logPerformance,
-  logDatabaseOperation
-} = require('./utils/logger');
-
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
-const multer = require('multer');
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
-const xlsx = require('xlsx');
-const Tesseract = require('tesseract.js');
-const axios = require('axios');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
-
-// Create component loggers
-const appLogger = createComponentLogger('APP');
-const apiLogger = createComponentLogger('API');
-const securityLogger = createComponentLogger('SECURITY');
+const multer = require("multer");
+const pdfParse = require("pdf-parse");
+const mammoth = require("mammoth");
+const xlsx = require("xlsx");
+const Tesseract = require("tesseract.js");
+const axios = require("axios");
+const fs = require("fs");
+const { v4: uuidv4 } = require("uuid");
 
 // Initialize Simple USB Monitor
 const SimpleUSBMonitor = require("./simple-usb-monitor");
@@ -49,7 +31,6 @@ const imageRoutes = require("./routes/imageRoutes");
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(requestLogger); // Custom request logging
 app.use(morgan("combined"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -58,45 +39,49 @@ app.use(express.urlencoded({ extended: true }));
 const fileTextStore = {};
 
 // Multer setup for file uploads
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: "uploads/" });
 
 // Helper: extract text from file
 async function extractText(filePath, mimetype) {
-  if (mimetype === 'application/pdf') {
+  if (mimetype === "application/pdf") {
     const data = fs.readFileSync(filePath);
     const pdfData = await pdfParse(data);
     return pdfData.text;
   } else if (
-    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    mimetype === 'application/msword'
+    mimetype ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mimetype === "application/msword"
   ) {
     const data = fs.readFileSync(filePath);
     const result = await mammoth.extractRawText({ buffer: data });
     return result.value;
   } else if (
-    mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    mimetype === 'application/vnd.ms-excel'
+    mimetype ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mimetype === "application/vnd.ms-excel"
   ) {
     const workbook = xlsx.readFile(filePath);
-    let text = '';
+    let text = "";
     workbook.SheetNames.forEach((sheetName) => {
       const sheet = workbook.Sheets[sheetName];
       text += xlsx.utils.sheet_to_csv(sheet);
     });
     return text;
-  } else if (mimetype.startsWith('image/')) {
-    const { data: { text } } = await Tesseract.recognize(filePath, 'eng');
+  } else if (mimetype.startsWith("image/")) {
+    const {
+      data: { text },
+    } = await Tesseract.recognize(filePath, "eng");
     return text;
   } else {
-    return '[Unsupported file type]';
+    return "[Unsupported file type]";
   }
 }
 
 // File upload endpoint
-app.post('/api/ollama/upload', upload.single('file'), async (req, res) => {
+app.post("/api/ollama/upload", upload.single("file"), async (req, res) => {
   try {
     const file = req.file;
-    if (!file) return res.status(400).json({ error: 'No file uploaded' });
+    if (!file) return res.status(400).json({ error: "No file uploaded" });
     const text = await extractText(file.path, file.mimetype);
     const fileId = uuidv4();
     fileTextStore[fileId] = { text, name: file.originalname };
@@ -104,33 +89,68 @@ app.post('/api/ollama/upload', upload.single('file'), async (req, res) => {
     fs.unlinkSync(file.path);
     res.json({ fileId });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to process file' });
+    res.status(500).json({ error: "Failed to process file" });
   }
 });
 
 // Ollama chat endpoint
-app.post('/api/ollama/chat', async (req, res) => {
+app.post("/api/ollama/chat", async (req, res) => {
   try {
     const { messages, fileId } = req.body;
-    let context = '';
+    let context = "";
     if (fileId && fileTextStore[fileId]) {
       context = `\n\n[File context: ${fileTextStore[fileId].name}]\n${fileTextStore[fileId].text}\n`;
     }
     // Compose prompt for Ollama
-    const lastUserMsg = messages.filter(m => m.role === 'user').pop();
-    const prompt = context ? `${context}\nUser: ${lastUserMsg.content}` : lastUserMsg.content;
+    const lastUserMsg = messages.filter((m) => m.role === "user").pop();
+    const prompt = context
+      ? `${context}\nUser: ${lastUserMsg.content}`
+      : lastUserMsg.content;
+
     // Call Ollama (Mistral)
-    const ollamaRes = await axios.post('http://localhost:11434/api/generate', {
-      model: 'mistral',
-      prompt,
-      stream: false
-    }, {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // const ollamaRes = await axios.post(
+    //   "http://localhost:11434/api/generate",
+    //   {
+    //     model: "mistral",
+    //     prompt,
+    //     stream: false,
+    //   },
+    //   {
+    //     headers: { "Content-Type": "application/json" },
+    //   }
+    // );
+    // const data = ollamaRes.data;
+    // res.json({ answer: data.response });
+
+    const ollamaRes = await axios.post(
+      "https://api.mistral.ai/v1/chat/completions",
+      {
+        model: "mistral-tiny",
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: prompt },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer sk-EL2JDIwD6Wvw19UCj4YX1D0HmitiU3Wp`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("MISTRAL KEY: EL2JDIwD6Wvw19UCj4YX1D0HmitiU3Wp");
+
     const data = ollamaRes.data;
-    res.json({ answer: data.response });
+    res.json({ answer: data.choices[0].message.content });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to contact Ollama' });
+    console.error("❌ Ollama call failed:", e.message);
+    if (e.response?.data) console.error("📄 Response body:", e.response.data);
+
+    console.log("MISTRAL KEY: EL2JDIwD6Wvw19UCj4YX1D0HmitiU3Wp");
+
+    console.log("🔑 API KEY:", process.env.MISTRAL_API_KEY);
+    res.status(500).json({ error: "Failed to contact Ollama" });
   }
 });
 
@@ -171,10 +191,8 @@ app.get("/api/status", (req, res) => {
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
 app.use("/api/security", require("./routes/securityRoutes"));
-app.use("/api/logs", require("./routes/logRoutes"));
 
 // Error handling middleware
-app.use(errorLogger); // Custom error logging
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({
@@ -193,68 +211,51 @@ app.use("*", (req, res) => {
 
 // Start server
 app.listen(PORT, async () => {
-  // Log application startup
-  logAppStart();
-  appLogger.info(`🚀 Gods Eye Backend server running on port ${PORT}`);
-  appLogger.info(`📊 Health check: http://localhost:${PORT}/api/health`);
-  appLogger.info(`📈 Status: http://localhost:${PORT}/api/status`);
-  
+  console.log(`🚀 Gods Eye Backend server running on port ${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`📈 Status: http://localhost:${PORT}/api/status`);
+
   // Initialize and start USB monitoring
   try {
     const usbMonitor = new SimpleUSBMonitor({
       checkInterval: 1000, // Check every 1 second
-      autoShutdown: true
+      autoShutdown: true,
     });
-    
+
     await usbMonitor.startMonitoring();
-    securityLogger.info('🔒 USB Security Monitor initialized and active');
-    
+    console.log("🔒 USB Security Monitor initialized and active");
+
     // Handle USB storage detection
-    usbMonitor.on('usbStorageDetected', (drive) => {
-      const deviceInfo = {
-        DeviceID: drive.DeviceID,
-        Size: drive.Size ? Math.round(drive.Size / 1024 / 1024 / 1024 * 100) / 100 + ' GB' : 'Unknown'
-      };
-      
-      securityLogger.security('🚨 USB STORAGE DETECTED - SHUTTING DOWN APPLICATION!', deviceInfo);
-      logUSBEvent('USB_STORAGE_DETECTED', deviceInfo);
-      
+    usbMonitor.on("usbStorageDetected", (drive) => {
+      console.log("🚨 USB STORAGE DETECTED - SHUTTING DOWN APPLICATION!");
+      console.log("❌ Security violation: USB storage device connected");
+      console.log(
+        `   Drive: ${drive.DeviceID}, Size: ${
+          drive.Size
+            ? Math.round((drive.Size / 1024 / 1024 / 1024) * 100) / 100 + " GB"
+            : "Unknown"
+        }`
+      );
+
       // Shutdown the application
       setTimeout(() => {
-        logAppShutdown('Security violation: USB storage detected');
         process.exit(1);
       }, 1000);
     });
-    
   } catch (error) {
-    console.error('❌ Failed to initialize USB Monitor:', error.message);
+    console.error("❌ Failed to initialize USB Monitor:", error.message);
   }
 });
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
-  appLogger.info("SIGTERM received, shutting down gracefully");
-  logAppShutdown('SIGTERM signal received');
+  console.log("SIGTERM received, shutting down gracefully");
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  appLogger.info("SIGINT received, shutting down gracefully");
-  logAppShutdown('SIGINT signal received');
+  console.log("SIGINT received, shutting down gracefully");
   process.exit(0);
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  appLogger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
-  logAppShutdown('Uncaught exception');
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  appLogger.error('Unhandled Rejection:', { reason, promise });
-  logAppShutdown('Unhandled rejection');
-  process.exit(1);
 });
 
 app.use("/api/test", testInsertRoute);

@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { PaperAirplaneIcon, MagnifyingGlassIcon, XMarkIcon, PaperClipIcon } from "@heroicons/react/24/solid";
+import {
+  PaperAirplaneIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  PaperClipIcon,
+} from "@heroicons/react/24/solid";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import zoeIco from "../avatars/zoe.png";
 
@@ -34,7 +39,9 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
 
   // Filtered messages for search
   const filteredMessages = searchTerm
-    ? messages.filter((msg) => msg.text.toLowerCase().includes(searchTerm.toLowerCase()))
+    ? messages.filter((msg) =>
+        msg.text.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     : messages;
 
   // Drag and drop handlers
@@ -51,8 +58,8 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
-      const imageFiles = files.filter(file => file.type.startsWith("image/"));
-      
+      const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+
       if (ollamaPanelOpen) {
         // For Ollama chat - show preview only (single image)
         if (imageFiles.length > 0) {
@@ -64,13 +71,13 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
       } else {
         // For main chat - show preview only (multiple images)
         if (imageFiles.length > 0) {
-          const newPreviews = imageFiles.map(file => ({
+          const newPreviews = imageFiles.map((file) => ({
             file,
             url: URL.createObjectURL(file),
-            id: Date.now() + Math.random()
+            id: Date.now() + Math.random(),
           }));
-          setChatImagePreviews(prev => [...prev, ...newPreviews]);
-          setChatPreviewFiles(prev => [...prev, ...imageFiles]);
+          setChatImagePreviews((prev) => [...prev, ...newPreviews]);
+          setChatPreviewFiles((prev) => [...prev, ...imageFiles]);
         }
       }
     }
@@ -127,13 +134,13 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
         const newMessage = {
           from: "me",
           text: message.trim() || "Images",
-          images: chatImagePreviews.map(preview => ({
+          images: chatImagePreviews.map((preview) => ({
             url: preview.url,
             fileName: preview.file.name,
-            fileType: preview.file.type
+            fileType: preview.file.type,
           })),
           id: Date.now() + Math.random(),
-          replyTo: replyingTo
+          replyTo: replyingTo,
         };
         setMessages((prev) => [...prev, newMessage]);
         // Clear preview after sending
@@ -145,7 +152,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           from: "me",
           text: message,
           id: Date.now() + Math.random(),
-          replyTo: replyingTo
+          replyTo: replyingTo,
         };
         setMessages((prev) => [...prev, newMessage]);
       }
@@ -157,7 +164,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   // Handle Ollama chat send
   const handleOllamaSend = async () => {
     if (!ollamaInput.trim() && !ollamaPreviewFile) return;
-    
+
     // Handle file upload if there's a preview file
     if (ollamaPreviewFile) {
       await handleOllamaFileDrop(ollamaPreviewFile);
@@ -165,12 +172,12 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
       setOllamaImagePreview(null);
       setOllamaPreviewFile(null);
     }
-    
+
     const newMsg = { role: "user", content: ollamaInput || "Image uploaded" };
     setOllamaMessages((prev) => [...prev, newMsg]);
     setOllamaInput("");
     setOllamaLoading(true);
-    
+
     try {
       const res = await fetch("/api/ollama/chat", {
         method: "POST",
@@ -181,16 +188,22 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
         }),
       });
       const data = await res.json();
-      setOllamaMessages((prev) => [...prev, { role: "assistant", content: data.answer }]);
+      setOllamaMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.answer },
+      ]);
     } catch (e) {
-      setOllamaMessages((prev) => [...prev, { role: "assistant", content: "[Error contacting Ollama]" }]);
+      setOllamaMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "[Error contacting Ollama]" },
+      ]);
     }
     setOllamaLoading(false);
   };
 
   // Handle reply to message
   const handleReply = (messageId) => {
-    const messageToReply = messages.find(msg => msg.id === messageId);
+    const messageToReply = messages.find((msg) => msg.id === messageId);
     if (messageToReply) {
       setReplyingTo(messageToReply);
       inputRef.current?.focus();
@@ -199,10 +212,12 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
 
   // Remove image from preview
   const removeImagePreview = (imageId) => {
-    setChatImagePreviews(prev => prev.filter(img => img.id !== imageId));
-    setChatPreviewFiles(prev => {
+    setChatImagePreviews((prev) => prev.filter((img) => img.id !== imageId));
+    setChatPreviewFiles((prev) => {
       const updatedFiles = [...prev];
-      const indexToRemove = chatImagePreviews.findIndex(img => img.id === imageId);
+      const indexToRemove = chatImagePreviews.findIndex(
+        (img) => img.id === imageId
+      );
       if (indexToRemove !== -1) {
         updatedFiles.splice(indexToRemove, 1);
       }
@@ -216,7 +231,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     formData.append("file", file);
     setOllamaFileName(file.name);
     setOllamaFileId(null);
-    
+
     try {
       const res = await fetch("/api/ollama/upload", {
         method: "POST",
@@ -227,33 +242,57 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     } catch (e) {
       setOllamaFileId(null);
       setOllamaFileName(null);
-      setOllamaMessages((prev) => [...prev, { role: "assistant", content: "[File upload failed]" }]);
+      setOllamaMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "[File upload failed]" },
+      ]);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-white relative">
+    <div className="flex flex-col h-full bg-white">
       <ChatHeader />
       {/* Ollama Left Bottom Panel */}
       {ollamaPanelOpen && (
         <div className="fixed bottom-0 left-0 h-1/2 w-1/4 min-w-80 bg-white shadow-2xl z-50 flex flex-col border-r border-t border-gray-200 rounded-tr-lg animate-slide-in">
           <div className="flex items-center justify-between px-4 py-3 border-b bg-blue-50">
-            <div className="font-semibold text-lg text-gray-800">Ollama Chat (Mistral)</div>
-            <button onClick={() => setOllamaPanelOpen(false)} className="p-2 rounded hover:bg-gray-200">
+            <div className="font-semibold text-lg text-gray-800">
+              Ollama Chat (Mistral)
+            </div>
+            <button
+              onClick={() => setOllamaPanelOpen(false)}
+              className="p-2 rounded hover:bg-gray-200"
+            >
               <XMarkIcon className="h-6 w-6 text-gray-700" />
             </button>
           </div>
           {/* Ollama Messages - Scrollable Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {ollamaFileName && (
-              <div className="mb-2 text-xs text-blue-700">File for Q&A: <span className="font-semibold">{ollamaFileName}</span></div>
+              <div className="mb-2 text-xs text-blue-700">
+                File for Q&A:{" "}
+                <span className="font-semibold">{ollamaFileName}</span>
+              </div>
             )}
             {ollamaMessages.length === 0 && (
-              <div className="text-gray-400 text-center mt-10">Start chatting with Ollama...</div>
+              <div className="text-gray-400 text-center mt-10">
+                Start chatting with Ollama...
+              </div>
             )}
             {ollamaMessages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`rounded-xl px-4 py-2 max-w-xs ${msg.role === "user" ? "bg-blue-400 text-white" : "bg-gray-100 text-gray-900"}`}>
+              <div
+                key={idx}
+                className={`flex ${
+                  msg.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`rounded-xl px-4 py-2 max-w-xs ${
+                    msg.role === "user"
+                      ? "bg-blue-400 text-white"
+                      : "bg-gray-100 text-gray-900"
+                  }`}
+                >
                   {msg.content}
                 </div>
               </div>
@@ -264,9 +303,9 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
             {/* Image Preview */}
             {ollamaImagePreview && (
               <div className="mb-3 relative">
-                <img 
-                  src={ollamaImagePreview} 
-                  alt="Preview" 
+                <img
+                  src={ollamaImagePreview}
+                  alt="Preview"
                   className="max-w-20 max-h-20 rounded-lg border border-gray-200 object-cover"
                 />
                 <button
@@ -284,26 +323,30 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
             )}
             <form
               className="flex gap-2 items-end"
-              onSubmit={e => { e.preventDefault(); handleOllamaSend(); }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleOllamaSend();
+              }}
             >
               <textarea
                 placeholder="Ask Ollama..."
                 value={ollamaInput}
-                onChange={e => setOllamaInput(e.target.value)}
+                onChange={(e) => setOllamaInput(e.target.value)}
                 disabled={ollamaLoading}
                 className="flex-1 px-3 py-2 border rounded-lg focus:outline-none text-gray-900 resize-none max-h-32 min-h-[2.5rem] overflow-y-auto"
                 rows={1}
                 style={{
-                  height: 'auto',
-                  minHeight: '2.5rem',
-                  maxHeight: '8rem'
+                  height: "auto",
+                  minHeight: "2.5rem",
+                  maxHeight: "8rem",
                 }}
                 onInput={(e) => {
-                  e.target.style.height = 'auto';
-                  e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
+                  e.target.style.height = "auto";
+                  e.target.style.height =
+                    Math.min(e.target.scrollHeight, 128) + "px";
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     handleOllamaSend();
                   }
@@ -321,143 +364,167 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
         </div>
       )}
       {/* Main Chat Area - Scrollable Messages */}
-      <div
-        className={`flex-1 overflow-y-auto p-4 bg-white space-y-3 relative ${dragActive ? "ring-4 ring-blue-300" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {/* Drag-and-drop overlay */}
-        {dragActive && (
-          <div className="absolute inset-0 bg-blue-100 bg-opacity-80 flex items-center justify-center z-20 pointer-events-none rounded-lg">
-            <span className="text-blue-700 text-lg font-semibold">Drop file to upload</span>
-          </div>
-        )}
-        {/* Message List */}
-        {filteredMessages.map((msg, idx) => {
-          // If this message has a fileUrl, show a preview
-          if (msg.fileUrl) {
-            if (msg.fileType.startsWith("image/")) {
-              // Image preview
-              return (
-                <div key={idx} className="flex justify-end">
-                  <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
-                    <img src={msg.fileUrl} alt={msg.fileName} className="max-w-[200px] max-h-[150px] rounded mb-2" />
-                    <span className="text-xs text-white">{msg.fileName}</span>
-                  </div>
-                </div>
-              );
-            } else if (msg.fileType === "application/pdf") {
-              // PDF preview (embed first page if possible, else icon)
-              return (
-                <div key={idx} className="flex justify-end">
-                  <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
-                    <embed src={msg.fileUrl} type="application/pdf" width="200" height="150" className="rounded mb-2" />
-                    <span className="text-xs text-white">{msg.fileName}</span>
-                  </div>
-                </div>
-              );
-            } else if (
-              msg.fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-              msg.fileType === "application/msword"
-            ) {
-              // Word doc preview (icon + filename)
-              return (
-                <div key={idx} className="flex justify-end">
-                  <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
-                    <span className="text-4xl mb-2">📄</span>
-                    <span className="text-xs text-white">{msg.fileName}</span>
-                  </div>
-                </div>
-              );
-            } else if (
-              msg.fileType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-              msg.fileType === "application/vnd.ms-excel"
-            ) {
-              // Excel doc preview (icon + filename)
-              return (
-                <div key={idx} className="flex justify-end">
-                  <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
-                    <span className="text-4xl mb-2">📊</span>
-                    <span className="text-xs text-white">{msg.fileName}</span>
-                  </div>
-                </div>
-              );
-            } else {
-              // Generic file preview (icon + filename)
-              return (
-                <div key={idx} className="flex justify-end">
-                  <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
-                    <span className="text-4xl mb-2">📎</span>
-                    <span className="text-xs text-white">{msg.fileName}</span>
-                  </div>
-                </div>
-              );
-            }
-          }
-          // Updated message rendering for joe/me with reply and image support
-          return msg.from === "joe" ? (
-            <div key={idx} className="flex items-start gap-2 group">
-              <img src={zoeIco} alt="Joe" className="w-10 h-10 rounded-full" />
-              <div className="relative">
-                {msg.replyTo && (
-                  <div className="mb-2 p-2 bg-gray-100 rounded-lg text-sm text-gray-600 border-l-4 border-blue-400">
-                    <span className="font-semibold">Replying to:</span> {msg.replyTo.text}
-                  </div>
-                )}
-                <div className="bg-blue-100 text-black rounded-xl px-4 py-2 max-w-xs">
-                  {msg.text}
-                </div>
-                <button
-                  onClick={() => handleReply(msg.id)}
-                  className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-gray-200 rounded-full hover:bg-gray-300"
-                >
-                  <ArrowUturnLeftIcon className="h-4 w-4 text-gray-600" />
-                </button>
-              </div>
+      <div className="flex-1 overflow-hidden">
+        <div
+          className={`h-full overflow-y-auto p-4 bg-white space-y-3 relative ${
+            dragActive ? "ring-4 ring-blue-300" : ""
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Drag-and-drop overlay */}
+          {dragActive && (
+            <div className="absolute inset-0 bg-blue-100 bg-opacity-80 flex items-center justify-center z-20 pointer-events-none rounded-lg">
+              <span className="text-blue-700 text-lg font-semibold">
+                Drop file to upload
+              </span>
             </div>
-          ) : (
-            <div key={idx} className="flex justify-end group">
-              <div className="relative">
-                {msg.replyTo && (
-                  <div className="mb-2 p-2 bg-gray-100 rounded-lg text-sm text-gray-600 border-l-4 border-blue-400">
-                    <span className="font-semibold">Replying to:</span> {msg.replyTo.text}
-                  </div>
-                )}
-                {msg.images ? (
-                  <div className="max-w-xs">
-                    <div className="grid grid-cols-2 gap-1 mb-2">
-                      {msg.images.map((image, imgIdx) => (
-                        <img
-                          key={imgIdx}
-                          src={image.url}
-                          alt={image.fileName}
-                          className="rounded-lg max-w-full h-auto object-cover"
-                        />
-                      ))}
+          )}
+          {/* Message List */}
+          {filteredMessages.map((msg, idx) => {
+            // If this message has a fileUrl, show a preview
+            if (msg.fileUrl) {
+              if (msg.fileType.startsWith("image/")) {
+                // Image preview
+                return (
+                  <div key={idx} className="flex justify-end">
+                    <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
+                      <img
+                        src={msg.fileUrl}
+                        alt={msg.fileName}
+                        className="max-w-[200px] max-h-[150px] rounded mb-2"
+                      />
+                      <span className="text-xs text-white">{msg.fileName}</span>
                     </div>
-                    {msg.text !== "Images" && (
-                      <div className="bg-blue-400 text-white rounded-xl px-4 py-2">
-                        {msg.text}
-                      </div>
-                    )}
                   </div>
-                ) : (
-                  <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs">
+                );
+              } else if (msg.fileType === "application/pdf") {
+                // PDF preview (embed first page if possible, else icon)
+                return (
+                  <div key={idx} className="flex justify-end">
+                    <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
+                      <embed
+                        src={msg.fileUrl}
+                        type="application/pdf"
+                        width="200"
+                        height="150"
+                        className="rounded mb-2"
+                      />
+                      <span className="text-xs text-white">{msg.fileName}</span>
+                    </div>
+                  </div>
+                );
+              } else if (
+                msg.fileType ===
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                msg.fileType === "application/msword"
+              ) {
+                // Word doc preview (icon + filename)
+                return (
+                  <div key={idx} className="flex justify-end">
+                    <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
+                      <span className="text-4xl mb-2">📄</span>
+                      <span className="text-xs text-white">{msg.fileName}</span>
+                    </div>
+                  </div>
+                );
+              } else if (
+                msg.fileType ===
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+                msg.fileType === "application/vnd.ms-excel"
+              ) {
+                // Excel doc preview (icon + filename)
+                return (
+                  <div key={idx} className="flex justify-end">
+                    <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
+                      <span className="text-4xl mb-2">📊</span>
+                      <span className="text-xs text-white">{msg.fileName}</span>
+                    </div>
+                  </div>
+                );
+              } else {
+                // Generic file preview (icon + filename)
+                return (
+                  <div key={idx} className="flex justify-end">
+                    <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs flex flex-col items-end">
+                      <span className="text-4xl mb-2">📎</span>
+                      <span className="text-xs text-white">{msg.fileName}</span>
+                    </div>
+                  </div>
+                );
+              }
+            }
+            // Updated message rendering for joe/me with reply and image support
+            return msg.from === "joe" ? (
+              <div key={idx} className="flex items-start gap-2 group">
+                <img
+                  src={zoeIco}
+                  alt="Joe"
+                  className="w-10 h-10 rounded-full"
+                />
+                <div className="relative">
+                  {msg.replyTo && (
+                    <div className="mb-2 p-2 bg-gray-100 rounded-lg text-sm text-gray-600 border-l-4 border-blue-400">
+                      <span className="font-semibold">Replying to:</span>{" "}
+                      {msg.replyTo.text}
+                    </div>
+                  )}
+                  <div className="bg-blue-100 text-black rounded-xl px-4 py-2 max-w-xs">
                     {msg.text}
                   </div>
-                )}
-                <button
-                  onClick={() => handleReply(msg.id)}
-                  className="absolute -left-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-gray-200 rounded-full hover:bg-gray-300"
-                >
-                  <ArrowUturnLeftIcon className="h-4 w-4 text-gray-600" />
-                </button>
+                  <button
+                    onClick={() => handleReply(msg.id)}
+                    className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-gray-200 rounded-full hover:bg-gray-300"
+                  >
+                    <ArrowUturnLeftIcon className="h-4 w-4 text-gray-600" />
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-        <div ref={chatEndRef} />
+            ) : (
+              <div key={idx} className="flex justify-end group">
+                <div className="relative">
+                  {msg.replyTo && (
+                    <div className="mb-2 p-2 bg-gray-100 rounded-lg text-sm text-gray-600 border-l-4 border-blue-400">
+                      <span className="font-semibold">Replying to:</span>{" "}
+                      {msg.replyTo.text}
+                    </div>
+                  )}
+                  {msg.images ? (
+                    <div className="max-w-xs">
+                      <div className="grid grid-cols-2 gap-1 mb-2">
+                        {msg.images.map((image, imgIdx) => (
+                          <img
+                            key={imgIdx}
+                            src={image.url}
+                            alt={image.fileName}
+                            className="rounded-lg max-w-full h-auto object-cover"
+                          />
+                        ))}
+                      </div>
+                      {msg.text !== "Images" && (
+                        <div className="bg-blue-400 text-white rounded-xl px-4 py-2">
+                          {msg.text}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs">
+                      {msg.text}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => handleReply(msg.id)}
+                    className="absolute -left-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-gray-200 rounded-full hover:bg-gray-300"
+                  >
+                    <ArrowUturnLeftIcon className="h-4 w-4 text-gray-600" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={chatEndRef} />
+        </div>
       </div>
 
       {/* Fixed Input Area at Bottom */}
@@ -483,7 +550,9 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           <div className="mb-3 p-3 bg-gray-100 rounded-lg border-l-4 border-blue-400">
             <div className="flex justify-between items-start">
               <div>
-                <span className="text-sm font-semibold text-gray-700">Replying to:</span>
+                <span className="text-sm font-semibold text-gray-700">
+                  Replying to:
+                </span>
                 <p className="text-sm text-gray-600">{replyingTo.text}</p>
               </div>
               <button
@@ -527,13 +596,14 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
             className="flex-1 px-3 py-2 border rounded-lg focus:outline-none text-gray-900 resize-none max-h-32 min-h-[2.5rem] overflow-y-auto"
             rows={1}
             style={{
-              height: 'auto',
-              minHeight: '2.5rem',
-              maxHeight: '8rem'
+              height: "auto",
+              minHeight: "2.5rem",
+              maxHeight: "8rem",
             }}
             onInput={(e) => {
-              e.target.style.height = 'auto';
-              e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
+              e.target.style.height = "auto";
+              e.target.style.height =
+                Math.min(e.target.scrollHeight, 128) + "px";
             }}
           />
           <button

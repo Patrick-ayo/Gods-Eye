@@ -126,7 +126,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
       const imageFiles = files.filter((file) => file.type.startsWith("image/"));
 
       if (ollamaPanelOpen) {
-        // For Ollama chat - show preview only (single image)
+        // For Cohere chat - show preview only (single image)
         if (imageFiles.length > 0) {
           const file = imageFiles[0];
           const url = URL.createObjectURL(file);
@@ -229,7 +229,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     }
   };
 
-  // Handle Ollama chat send
+  // Handle Cohere chat send
   const handleOllamaSend = async () => {
     if (!ollamaInput.trim() && !ollamaPreviewFile) return;
 
@@ -247,7 +247,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     setOllamaLoading(true);
 
     try {
-      const res = await fetch("/api/ollama/chat", {
+      const res = await fetch("http://localhost:3001/api/ollama/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -255,15 +255,21 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           fileId: ollamaFileId,
         }),
       });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
       const data = await res.json();
       setOllamaMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.answer },
       ]);
     } catch (e) {
+      console.error("Error calling Cohere API:", e);
       setOllamaMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "[Error contacting Ollama]" },
+        { role: "assistant", content: `[Error contacting Cohere: ${e.message}]` },
       ]);
     }
     setOllamaLoading(false);
@@ -293,7 +299,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     });
   };
 
-  // Handle file drop for Ollama
+  // Handle file drop for Cohere
   const handleOllamaFileDrop = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -301,7 +307,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     setOllamaFileId(null);
 
     try {
-      const res = await fetch("/api/ollama/upload", {
+      const res = await fetch("http://localhost:3001/api/ollama/upload", {
         method: "POST",
         body: formData,
       });
@@ -320,12 +326,12 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   return (
     <div className="flex flex-col h-full bg-white">
       <ChatHeader />
-      {/* Ollama Left Bottom Panel */}
+      {/* Cohere Left Bottom Panel */}
       {ollamaPanelOpen && (
         <div className="fixed bottom-0 left-0 h-1/2 w-1/4 min-w-80 bg-white shadow-2xl z-50 flex flex-col border-r border-t border-gray-200 rounded-tr-lg animate-slide-in">
           <div className="flex items-center justify-between px-4 py-3 border-b bg-blue-50">
             <div className="font-semibold text-lg text-gray-800">
-              Ollama Chat (Mistral)
+              Cohere Chat (Command)
             </div>
             <button
               onClick={() => setOllamaPanelOpen(false)}
@@ -334,7 +340,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
               <XMarkIcon className="h-6 w-6 text-gray-700" />
             </button>
           </div>
-          {/* Ollama Messages - Scrollable Area */}
+          {/* Cohere Messages - Scrollable Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {ollamaFileName && (
               <div className="mb-2 text-xs text-blue-700">
@@ -344,7 +350,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
             )}
             {ollamaMessages.length === 0 && (
               <div className="text-gray-400 text-center mt-10">
-                Start chatting with Ollama...
+                Start chatting with Cohere...
               </div>
             )}
             {ollamaMessages.map((msg, idx) => (
@@ -366,7 +372,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
               </div>
             ))}
           </div>
-          {/* Ollama Fixed Input Area at Bottom */}
+          {/* Cohere Fixed Input Area at Bottom */}
           <div className="border-t bg-white p-4">
             {/* Image Preview */}
             {ollamaImagePreview && (
@@ -397,7 +403,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
               }}
             >
               <textarea
-                placeholder="Ask Ollama..."
+                placeholder="Ask Cohere..."
                 value={ollamaInput}
                 onChange={(e) => setOllamaInput(e.target.value)}
                 disabled={ollamaLoading}

@@ -8,19 +8,18 @@ let backendProcess;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1000,
-    minHeight: 600,
-    autoHideMenuBar: true,
+    // Normal Window Configuration
+    width: 1200,
+    height: 800,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
+      webSecurity: true,
     },
-    icon: path.join(__dirname, "assets", "icon.png"), // Optional: add an icon
-    show: false, // Don't show until ready
+    icon: path.join(__dirname, "assets", "icon.png"),
+    show: false,
   });
 
   // Show window when ready to prevent visual flash
@@ -28,17 +27,39 @@ function createWindow() {
     mainWindow.show();
   });
 
+  // Add error handling for loading failures
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('Failed to load:', errorDescription, 'URL:', validatedURL);
+    mainWindow.webContents.openDevTools();
+  });
+
+  // Log when page loads successfully
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('Page loaded successfully');
+  });
+
   // Load the React app
   if (process.env.NODE_ENV === "development") {
     // Development: Load from Vite dev server
     mainWindow.loadURL("http://localhost:5173");
-    // Open DevTools in development
-    // mainWindow.webContents.openDevTools();
+    // Open DevTools in development only
+    mainWindow.webContents.openDevTools();
   } else {
     // Production: Load from built files
-    mainWindow.loadFile(
-      path.join(__dirname, "..", "frontend", "dist", "index.html")
-    );
+    console.log('Loading Gods Eye Application');
+    console.log('App packaged status:', app.isPackaged);
+    console.log('Process resourcesPath:', process.resourcesPath);
+    console.log('__dirname:', __dirname);
+    
+    // Always load from the same relative path in production
+    const filePath = path.join(__dirname, "..", "frontend", "dist", "index.html");
+    console.log('Loading frontend from:', filePath);
+    
+    mainWindow.loadFile(filePath).catch((error) => {
+      console.error('Failed to load frontend:', error);
+      // Fallback: show error
+      mainWindow.loadURL('data:text/html,<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:Arial;font-size:24px;color:red;"><div><h1>Gods Eye - Loading Error</h1><p>Please contact administrator</p><p>Error: Failed to load application</p></div></div>');
+    });
   }
 
   // Handle window closed
@@ -53,13 +74,24 @@ function createWindow() {
 }
 
 function createMenu() {
+  // Normal application menu
   const template = [
     {
-      label: "File",
+      label: "Gods Eye",
       submenu: [
         {
+          label: "About Gods Eye",
+          click: () => {
+            // Show about dialog
+            mainWindow.webContents.executeJavaScript(`
+              alert('Gods Eye Monitoring System\\nVersion 1.0.0');
+            `);
+          },
+        },
+        { type: "separator" },
+        {
           label: "Quit",
-          accelerator: process.platform === "darwin" ? "Cmd+Q" : "Ctrl+Q",
+          accelerator: "Ctrl+Q",
           click: () => {
             app.quit();
           },
@@ -67,33 +99,23 @@ function createMenu() {
       ],
     },
     {
-      label: "Edit",
-      submenu: [
-        { role: "undo" },
-        { role: "redo" },
-        { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-      ],
-    },
-    {
       label: "View",
       submenu: [
-        { role: "reload" },
-        { role: "forceReload" },
-        { role: "toggleDevTools" },
-        { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
-        { type: "separator" },
-        { role: "togglefullscreen" },
+        {
+          label: "Toggle Developer Tools",
+          accelerator: "F12",
+          click: () => {
+            mainWindow.webContents.toggleDevTools();
+          },
+        },
+        {
+          label: "Reload",
+          accelerator: "Ctrl+R",
+          click: () => {
+            mainWindow.webContents.reload();
+          },
+        },
       ],
-    },
-    {
-      label: "Window",
-      submenu: [{ role: "minimize" }, { role: "close" }],
     },
   ];
 
@@ -103,12 +125,25 @@ function createMenu() {
 
 function startBackend() {
   // Start the backend as a child process
-  const backendPath = path.join(__dirname, "..", "backend", "app.js");
+  const isDev = !app.isPackaged;
+  let backendPath, backendCwd;
+  
+  if (isDev) {
+    backendPath = path.join(__dirname, "..", "backend", "app.js");
+    backendCwd = path.join(__dirname, "..", "backend");
+  } else {
+    // When packaged, backend is in resources directory
+    backendPath = path.join(process.resourcesPath, "backend", "app.js");
+    backendCwd = path.join(process.resourcesPath, "backend");
+  }
+  
+  console.log('Backend path:', backendPath);
+  console.log('Backend cwd:', backendCwd);
 
   try {
     backendProcess = fork(backendPath, [], {
       silent: true,
-      cwd: path.join(__dirname, "..", "backend"),
+      cwd: backendCwd,
     });
 
     backendProcess.stdout.on("data", (data) => {
@@ -132,6 +167,8 @@ function startBackend() {
 }
 
 app.whenReady().then(() => {
+  console.log('Starting Gods Eye Application');
+  
   createMenu();
   startBackend();
   createWindow();

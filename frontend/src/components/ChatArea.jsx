@@ -36,6 +36,11 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   const [ollamaFileName, setOllamaFileName] = useState(null);
   const [ollamaImagePreview, setOllamaImagePreview] = useState(null);
   const [ollamaPreviewFile, setOllamaPreviewFile] = useState(null);
+  
+  // Hazard detection state
+  const [isConfidential, setIsConfidential] = useState(false);
+  const [hazardDetectionLoading, setHazardDetectionLoading] = useState(false);
+  const [hazardDetectionTimeout, setHazardDetectionTimeout] = useState(null);
 
   // Filtered messages for search
   const filteredMessages = searchTerm
@@ -43,6 +48,66 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
         msg.text.toLowerCase().includes(searchTerm.toLowerCase())
       )
     : messages;
+
+  // Real-time hazard detection function
+  const detectHazard = async (text) => {
+    if (!text.trim()) {
+      setIsConfidential(false);
+      return;
+    }
+
+    try {
+      setHazardDetectionLoading(true);
+      const response = await fetch("http://localhost:8000/detect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: text }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setIsConfidential(data.result === "CONFIDENTIAL");
+      } else {
+        console.error("Hazard detection failed:", response.status);
+        setIsConfidential(false);
+      }
+    } catch (error) {
+      console.error("Error detecting hazard:", error);
+      setIsConfidential(false);
+    } finally {
+      setHazardDetectionLoading(false);
+    }
+  };
+
+  // Debounced hazard detection while typing
+  useEffect(() => {
+    if (hazardDetectionTimeout) {
+      clearTimeout(hazardDetectionTimeout);
+    }
+
+    const timeout = setTimeout(() => {
+      detectHazard(message);
+    }, 1000); // 1 second delay
+
+    setHazardDetectionTimeout(timeout);
+
+    return () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
+  }, [message]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hazardDetectionTimeout) {
+        clearTimeout(hazardDetectionTimeout);
+      }
+    };
+  }, [hazardDetectionTimeout]);
 
   // Drag and drop handlers
   const handleDragOver = (e) => {
@@ -141,6 +206,7 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           })),
           id: Date.now() + Math.random(),
           replyTo: replyingTo,
+          isConfidential: isConfidential,
         };
         setMessages((prev) => [...prev, newMessage]);
         // Clear preview after sending
@@ -153,11 +219,13 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           text: message,
           id: Date.now() + Math.random(),
           replyTo: replyingTo,
+          isConfidential: isConfidential,
         };
         setMessages((prev) => [...prev, newMessage]);
       }
       setMessage("");
       setReplyingTo(null);
+      setIsConfidential(false);
     }
   };
 
@@ -470,7 +538,16 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
                       {msg.replyTo.text}
                     </div>
                   )}
-                  <div className="bg-blue-100 text-black rounded-xl px-4 py-2 max-w-xs">
+                  {msg.isConfidential && (
+                    <div className="mb-1 text-xs text-red-600 font-semibold flex items-center gap-1">
+                      ⚠️ This message is confidential
+                    </div>
+                  )}
+                  <div className={`rounded-xl px-4 py-2 max-w-xs ${
+                    msg.isConfidential 
+                      ? "bg-red-100 text-red-900 border-2 border-red-300" 
+                      : "bg-blue-100 text-black"
+                  }`}>
                     {msg.text}
                   </div>
                   <button
@@ -490,6 +567,11 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
                       {msg.replyTo.text}
                     </div>
                   )}
+                  {msg.isConfidential && (
+                    <div className="mb-1 text-xs text-red-600 font-semibold flex items-center gap-1 justify-end">
+                      ⚠️ This message is confidential
+                    </div>
+                  )}
                   {msg.images ? (
                     <div className="max-w-xs">
                       <div className="grid grid-cols-2 gap-1 mb-2">
@@ -503,13 +585,21 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
                         ))}
                       </div>
                       {msg.text !== "Images" && (
-                        <div className="bg-blue-400 text-white rounded-xl px-4 py-2">
+                        <div className={`rounded-xl px-4 py-2 ${
+                          msg.isConfidential 
+                            ? "bg-red-500 text-white border-2 border-red-600" 
+                            : "bg-blue-400 text-white"
+                        }`}>
                           {msg.text}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="bg-blue-400 text-white rounded-xl px-4 py-2 max-w-xs">
+                    <div className={`rounded-xl px-4 py-2 max-w-xs ${
+                      msg.isConfidential 
+                        ? "bg-red-500 text-white border-2 border-red-600" 
+                        : "bg-blue-400 text-white"
+                    }`}>
                       {msg.text}
                     </div>
                   )}
@@ -586,6 +676,26 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           </div>
         )}
 
+        {/* Real-time Hazard Detection Indicator */}
+        {message.trim() && (
+          <div className="mb-3 flex items-center gap-2">
+            {hazardDetectionLoading ? (
+              <div className="text-sm text-gray-500 flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                Analyzing message...
+              </div>
+            ) : isConfidential ? (
+              <div className="text-sm text-red-600 font-semibold flex items-center gap-2 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                ⚠️ This message is confidential
+              </div>
+            ) : (
+              <div className="text-sm text-green-600 flex items-center gap-2 bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                ✓ Message is safe
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
@@ -593,7 +703,11 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 px-3 py-2 border rounded-lg focus:outline-none text-gray-900 resize-none max-h-32 min-h-[2.5rem] overflow-y-auto"
+            className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none text-gray-900 resize-none max-h-32 min-h-[2.5rem] overflow-y-auto ${
+              isConfidential 
+                ? "border-red-500 focus:border-red-600 bg-red-50" 
+                : "border-gray-300 focus:border-blue-500"
+            }`}
             rows={1}
             style={{
               height: "auto",
@@ -608,7 +722,11 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           />
           <button
             onClick={handleSend}
-            className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex-shrink-0"
+            className={`p-2 text-white rounded-lg transition flex-shrink-0 ${
+              isConfidential 
+                ? "bg-red-600 hover:bg-red-700" 
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
             <PaperAirplaneIcon className="h-5 w-5 rotate-315" />
           </button>

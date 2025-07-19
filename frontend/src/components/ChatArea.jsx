@@ -26,8 +26,6 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [chatImagePreviews, setChatImagePreviews] = useState([]);
-  const [chatPreviewFiles, setChatPreviewFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
   const [ollamaMessages, setOllamaMessages] = useState([]); // {role: 'user'|'assistant', content: string}
   const [ollamaInput, setOllamaInput] = useState("");
@@ -36,6 +34,21 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   const [ollamaFileName, setOllamaFileName] = useState(null);
   const [ollamaImagePreview, setOllamaImagePreview] = useState(null);
   const [ollamaPreviewFile, setOllamaPreviewFile] = useState(null);
+  const [imagePreviews, setImagePreviews] = useState([]);
+  const [imageFiles, setImageFiles] = useState([]);
+  const [enlargedImage, setEnlargedImage] = useState(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [currentMessageImages, setCurrentMessageImages] = useState([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [documentFiles, setDocumentFiles] = useState([]);
+  const [enlargedDocument, setEnlargedDocument] = useState(null);
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [documentPreviews, setDocumentPreviews] = useState([]);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentError, setDocumentError] = useState(false);
   
   // Hazard detection state
   const [isConfidential, setIsConfidential] = useState(false);
@@ -125,6 +138,16 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
       const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+      const documentFiles = files.filter((file) => 
+        file.type === "application/pdf" ||
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.type === "application/msword" ||
+        file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.type === "application/vnd.ms-excel" ||
+        file.type === "text/plain" ||
+        file.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+        file.type === "application/vnd.ms-powerpoint"
+      );
 
       if (ollamaPanelOpen) {
         // For Cohere chat - show preview only (single image)
@@ -135,15 +158,28 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           setOllamaPreviewFile(file);
         }
       } else {
-        // For main chat - show preview only (multiple images)
+        // For main chat - show preview in message input area
         if (imageFiles.length > 0) {
           const newPreviews = imageFiles.map((file) => ({
             file,
             url: URL.createObjectURL(file),
             id: Date.now() + Math.random(),
           }));
-          setChatImagePreviews((prev) => [...prev, ...newPreviews]);
-          setChatPreviewFiles((prev) => [...prev, ...imageFiles]);
+          setImagePreviews(newPreviews);
+          setImageFiles(imageFiles);
+        }
+        
+        // Handle document files
+        if (documentFiles.length > 0) {
+          const newDocPreviews = documentFiles.map((file) => ({
+            file,
+            url: URL.createObjectURL(file),
+            id: Date.now() + Math.random(),
+            fileName: file.name,
+            fileType: file.type,
+          }));
+          setDocumentPreviews(newDocPreviews);
+          setDocumentFiles(documentFiles);
         }
       }
     }
@@ -194,39 +230,43 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   };
 
   const handleSend = () => {
-    if (message.trim() || chatPreviewFiles.length > 0) {
-      if (chatPreviewFiles.length > 0) {
-        // Send message with images
-        const newMessage = {
-          from: "me",
-          text: message.trim() || "Images",
-          images: chatImagePreviews.map((preview) => ({
-            url: preview.url,
-            fileName: preview.file.name,
-            fileType: preview.file.type,
-          })),
-          id: Date.now() + Math.random(),
-          replyTo: replyingTo,
-          isConfidential: isConfidential,
-        };
-        setMessages((prev) => [...prev, newMessage]);
-        // Clear preview after sending
-        setChatImagePreviews([]);
-        setChatPreviewFiles([]);
-      } else {
-        // Send text message only
-        const newMessage = {
-          from: "me",
-          text: message,
-          id: Date.now() + Math.random(),
-          replyTo: replyingTo,
-          isConfidential: isConfidential,
-        };
-        setMessages((prev) => [...prev, newMessage]);
+    if (message.trim() || imageFiles.length > 0 || documentFiles.length > 0) {
+      const newMessage = {
+        from: "me",
+        text: message.trim() || (imageFiles.length > 0 || documentFiles.length > 0 ? "" : ""),
+        id: Date.now() + Math.random(),
+        replyTo: replyingTo,
+        isConfidential: isConfidential,
+      };
+      
+      // Add images if they exist
+      if (imageFiles.length > 0) {
+        newMessage.images = imagePreviews.map((preview) => ({
+          url: preview.url,
+          fileName: preview.file.name,
+          fileType: preview.file.type,
+        }));
       }
+      
+      // Add documents if they exist
+      if (documentFiles.length > 0) {
+        newMessage.documents = documentPreviews.map((preview) => ({
+          url: preview.url,
+          fileName: preview.fileName,
+          fileType: preview.fileType,
+        }));
+      }
+      
+      setMessages((prev) => [...prev, newMessage]);
       setMessage("");
       setReplyingTo(null);
       setIsConfidential(false);
+      
+      // Clear previews after sending
+      setImagePreviews([]);
+      setImageFiles([]);
+      setDocumentPreviews([]);
+      setDocumentFiles([]);
     }
   };
 
@@ -234,25 +274,67 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   const handleOllamaSend = async () => {
     if (!ollamaInput.trim() && !ollamaPreviewFile) return;
 
-    // Handle file upload if there's a preview file
+    let userMessage = ollamaInput || "";
+    let imageAnalysis = null;
+
+    // Handle image analysis if there's a preview file
     if (ollamaPreviewFile) {
-      await handleOllamaFileDrop(ollamaPreviewFile);
+      setOllamaLoading(true);
+      try {
+        const formData = new FormData();
+        formData.append("image", ollamaPreviewFile);
+        
+        const analysisRes = await fetch("http://localhost:3001/api/ollama/analyze-image", {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (analysisRes.ok) {
+          const analysisData = await analysisRes.json();
+          imageAnalysis = analysisData;
+          
+          // If user didn't provide text, use the analysis
+          if (!ollamaInput.trim()) {
+            userMessage = `Please analyze this image: ${ollamaPreviewFile.name}`;
+          }
+        }
+      } catch (e) {
+        console.error("Image analysis failed:", e);
+        setOllamaMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `[Image analysis failed: ${e.message}]` },
+        ]);
+        setOllamaLoading(false);
+        return;
+      }
+      
       // Clear preview after processing
       setOllamaImagePreview(null);
       setOllamaPreviewFile(null);
     }
 
-    const newMsg = { role: "user", content: ollamaInput || "Image uploaded" };
+    const newMsg = { 
+      role: "user", 
+      content: userMessage,
+      imageAnalysis: imageAnalysis
+    };
     setOllamaMessages((prev) => [...prev, newMsg]);
     setOllamaInput("");
     setOllamaLoading(true);
 
     try {
+      let chatPrompt = userMessage;
+      
+      // If we have image analysis, include it in the prompt
+      if (imageAnalysis) {
+        chatPrompt = `${userMessage}\n\nImage Analysis: ${imageAnalysis.analysis}\n\nExtracted Text: ${imageAnalysis.extractedText}`;
+      }
+      
       const res = await fetch("http://localhost:3001/api/ollama/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...ollamaMessages, newMsg],
+          messages: [...ollamaMessages.map(msg => ({ role: msg.role, content: msg.content })), { role: "user", content: chatPrompt }],
           fileId: ollamaFileId,
         }),
       });
@@ -286,19 +368,151 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
   };
 
   // Remove image from preview
-  const removeImagePreview = (imageId) => {
-    setChatImagePreviews((prev) => prev.filter((img) => img.id !== imageId));
-    setChatPreviewFiles((prev) => {
-      const updatedFiles = [...prev];
-      const indexToRemove = chatImagePreviews.findIndex(
-        (img) => img.id === imageId
-      );
+  const removeImageFromPreview = (imageId) => {
+    setImagePreviews((prev) => prev.filter((img) => img.id !== imageId));
+    setImageFiles((prev) => {
+      const indexToRemove = imagePreviews.findIndex((img) => img.id === imageId);
       if (indexToRemove !== -1) {
-        updatedFiles.splice(indexToRemove, 1);
+        const newFiles = [...prev];
+        newFiles.splice(indexToRemove, 1);
+        return newFiles;
       }
-      return updatedFiles;
+      return prev;
     });
   };
+
+  // Remove document from preview
+  const removeDocumentFromPreview = (documentId) => {
+    setDocumentPreviews((prev) => prev.filter((doc) => doc.id !== documentId));
+    setDocumentFiles((prev) => {
+      const indexToRemove = documentPreviews.findIndex((doc) => doc.id === documentId);
+      if (indexToRemove !== -1) {
+        const newFiles = [...prev];
+        newFiles.splice(indexToRemove, 1);
+        return newFiles;
+      }
+      return prev;
+    });
+  };
+
+  // Handle image enlargement
+  const handleImageClick = (imageSrc, messageImages = []) => {
+    setImageLoading(true);
+    setImageError(false);
+    setEnlargedImage(imageSrc);
+    setCurrentMessageImages(messageImages);
+    setCurrentImageIndex(messageImages.findIndex(img => img === imageSrc));
+    setIsImageModalOpen(true);
+  };
+
+  // Close image modal
+  const closeImageModal = () => {
+    setIsImageModalOpen(false);
+    setEnlargedImage(null);
+    setCurrentMessageImages([]);
+    setCurrentImageIndex(0);
+    setImageLoading(false);
+    setImageError(false);
+  };
+
+  // Navigate to next image
+  const nextImage = () => {
+    if (currentMessageImages.length > 0 && currentImageIndex < currentMessageImages.length - 1) {
+      const nextIndex = currentImageIndex + 1;
+      setCurrentImageIndex(nextIndex);
+      setEnlargedImage(currentMessageImages[nextIndex]);
+      setImageLoading(true);
+      setImageError(false);
+    }
+  };
+
+  // Navigate to previous image
+  const prevImage = () => {
+    if (currentMessageImages.length > 0 && currentImageIndex > 0) {
+      const prevIndex = currentImageIndex - 1;
+      setCurrentImageIndex(prevIndex);
+      setEnlargedImage(currentMessageImages[prevIndex]);
+      setImageLoading(true);
+      setImageError(false);
+    }
+  };
+
+  const closeDocumentModal = () => {
+    setIsDocumentModalOpen(false);
+    setSelectedDocument(null);
+  };
+
+  const handleDocumentClick = (documentUrl, fileName, fileType) => {
+    setSelectedDocument({ url: documentUrl, fileName, fileType });
+    setIsDocumentModalOpen(true);
+  };
+
+  // Get file icon based on file type
+  const getFileIcon = (fileType) => {
+    if (fileType === 'application/pdf') {
+      return '📄';
+    } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileType === 'application/msword') {
+      return '📝';
+    } else if (fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || fileType === 'application/vnd.ms-excel') {
+      return '📊';
+    } else if (fileType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || fileType === 'application/vnd.ms-powerpoint') {
+      return '📽️';
+    } else if (fileType === 'text/plain') {
+      return '📄';
+    } else {
+      return '📁';
+    }
+  };
+
+  // Get file extension from filename
+  const getFileExtension = (fileName) => {
+    return fileName.split('.').pop().toUpperCase();
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Handle keyboard navigation for image modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (isImageModalOpen) {
+        if (e.key === 'Escape') {
+          closeImageModal();
+        } else if (e.key === 'ArrowRight') {
+          nextImage();
+        } else if (e.key === 'ArrowLeft') {
+          prevImage();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isImageModalOpen, currentImageIndex, currentMessageImages]);
+
+  // Handle escape key to close modals
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (isImageModalOpen) {
+          closeImageModal();
+        } else if (isDocumentModalOpen) {
+          closeDocumentModal();
+        }
+      }
+    };
+    
+    if (isImageModalOpen || isDocumentModalOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isImageModalOpen, isDocumentModalOpen]);
 
   // Handle file drop for Cohere
   const handleOllamaFileDrop = async (file) => {
@@ -361,14 +575,27 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
                   msg.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
-                <div
-                  className={`rounded-xl px-4 py-2 max-w-xs ${
-                    msg.role === "user"
-                      ? "bg-blue-400 text-white"
-                      : "bg-gray-100 text-gray-900"
-                  }`}
-                >
-                  {msg.content}
+                <div className="max-w-xs">
+                  {/* Show image analysis if available */}
+                  {msg.imageAnalysis && (
+                    <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                      <div className="font-semibold text-blue-800 mb-1">📸 Image: {msg.imageAnalysis.filename}</div>
+                      {msg.imageAnalysis.extractedText && (
+                        <div className="text-gray-600 mb-2">
+                          <strong>Extracted text:</strong> {msg.imageAnalysis.extractedText}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div
+                    className={`rounded-xl px-4 py-2 ${
+                      msg.role === "user"
+                        ? "bg-blue-400 text-white"
+                        : "bg-gray-100 text-gray-900"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
                 </div>
               </div>
             ))}
@@ -432,7 +659,11 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
                 className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex-shrink-0"
                 disabled={ollamaLoading}
               >
-                <PaperAirplaneIcon className="h-5 w-5 rotate-315" />
+                {ollamaLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                ) : (
+                  <PaperAirplaneIcon className="h-5 w-5 rotate-315" />
+                )}
               </button>
             </form>
           </div>
@@ -581,33 +812,88 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
                   )}
                   {msg.images ? (
                     <div className="max-w-xs">
-                      <div className="grid grid-cols-2 gap-1 mb-2">
-                        {msg.images.map((image, imgIdx) => (
-                          <img
-                            key={imgIdx}
-                            src={image.url}
-                            alt={image.fileName}
-                            className="rounded-lg max-w-full h-auto object-cover"
-                          />
-                        ))}
-                      </div>
-                      {msg.text !== "Images" && (
-                        <div className={`rounded-xl px-4 py-2 ${
-                          msg.isConfidential 
-                            ? "bg-red-500 text-white border-2 border-red-600" 
-                            : "bg-blue-400 text-white"
-                        }`}>
-                          {msg.text}
+                      {/* WhatsApp-like image container */}
+                      <div className="bg-white rounded-lg shadow-md p-1 mb-2">
+                        <div className="grid grid-cols-2 gap-1">
+                          {msg.images.map((image, imgIdx) => (
+                            <div key={imgIdx} className="relative">
+                              <img
+                                src={image.url}
+                                alt={image.fileName}
+                                className="rounded-lg w-full h-32 object-cover cursor-pointer hover:opacity-80 transition"
+                                onClick={() => handleImageClick(image.url, msg.images.map(img => img.url))}
+                              />
+                              {/* Optional: Add image count overlay for multiple images */}
+                              {msg.images.length > 1 && imgIdx === 0 && (
+                                <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                                  {msg.images.length}
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      )}
+                        {/* Caption below images */}
+                        {msg.text !== "Images" && msg.text && (
+                          <div className="px-2 py-1 text-gray-700 text-sm">
+                            {msg.text}
+                          </div>
+                        )}
+                        {/* WhatsApp-like timestamp */}
+                        <div className="flex justify-end px-2 pb-1">
+                          <span className="text-xs text-gray-400">
+                            {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : msg.documents ? (
+                    <div className="max-w-xs">
+                      {/* Document container */}
+                      <div className="bg-white rounded-lg shadow-md p-3 mb-2">
+                        <div className="space-y-2">
+                          {msg.documents.map((document, docIdx) => (
+                            <div key={docIdx} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition" onClick={() => handleDocumentClick(document.url, document.fileName, document.fileType)}>
+                              <div className="text-2xl">
+                                {getFileIcon(document.fileType)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-gray-900 truncate">
+                                  {document.fileName}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {getFileExtension(document.fileName)} • {document.fileType.split('/').pop()}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Caption below documents */}
+                        {msg.text && (
+                          <div className="px-2 py-1 text-gray-700 text-sm mt-2">
+                            {msg.text}
+                          </div>
+                        )}
+                        {/* WhatsApp-like timestamp */}
+                        <div className="flex justify-end px-2 pb-1">
+                          <span className="text-xs text-gray-400">
+                            {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className={`rounded-xl px-4 py-2 max-w-xs ${
+                    <div className={`rounded-xl px-4 py-2 max-w-xs relative ${
                       msg.isConfidential 
                         ? "bg-red-500 text-white border-2 border-red-600" 
                         : "bg-blue-400 text-white"
                     }`}>
                       {msg.text}
+                      {/* WhatsApp-like timestamp */}
+                      <div className="flex justify-end mt-1">
+                        <span className="text-xs text-blue-100">
+                          {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      </div>
                     </div>
                   )}
                   <button
@@ -662,24 +948,55 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           </div>
         )}
 
-        {/* Image Preview for Main Chat */}
-        {chatImagePreviews.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {chatImagePreviews.map((preview) => (
-              <div key={preview.id} className="relative">
-                <img
-                  src={preview.url}
-                  alt="Preview"
-                  className="max-w-20 max-h-20 rounded-lg border border-gray-200 object-cover"
-                />
-                <button
-                  onClick={() => removeImagePreview(preview.id)}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 transition"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+        {/* Image Preview in Message Input */}
+        {imagePreviews.length > 0 && (
+          <div className="mb-3 p-3 bg-gray-50 rounded-lg border">
+            <div className="text-sm font-medium text-gray-700 mb-2">Images to send:</div>
+            <div className="flex flex-wrap gap-2">
+              {imagePreviews.map((preview) => (
+                <div key={preview.id} className="relative">
+                  <img
+                    src={preview.url}
+                    alt="Preview"
+                    className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition"
+                    onClick={() => handleImageClick(preview.url)}
+                  />
+                  <button
+                    onClick={() => removeImageFromPreview(preview.id)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 transition"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Document Preview in Message Input */}
+        {documentPreviews.length > 0 && (
+          <div className="mb-3 p-3 bg-gray-50 rounded-lg border">
+            <div className="text-sm font-medium text-gray-700 mb-2">Documents to send:</div>
+            <div className="flex flex-wrap gap-2">
+              {documentPreviews.map((preview) => (
+                <div key={preview.id} className="relative">
+                  <div className="w-16 h-16 bg-gray-200 rounded-lg border border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-300 transition">
+                    <div className="text-2xl mb-1">
+                      {getFileIcon(preview.fileType)}
+                    </div>
+                    <div className="text-xs text-gray-600 text-center truncate max-w-full">
+                      {getFileExtension(preview.fileName)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeDocumentFromPreview(preview.id)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 transition"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -710,8 +1027,11 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none text-gray-900 resize-none max-h-32 min-h-[2.5rem] overflow-y-auto ${
-              isConfidential 
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none text-gray-900 resize-none max-h-32 min-h-[2.5rem] overflow-y-auto transition-all ${
+              dragActive ? 'border-blue-400 bg-blue-50' : isConfidential 
                 ? "border-red-500 focus:border-red-600 bg-red-50" 
                 : "border-gray-300 focus:border-blue-500"
             }`}
@@ -739,6 +1059,134 @@ function ChatArea({ ollamaPanelOpen, setOllamaPanelOpen }) {
           </button>
         </div>
       </div>
+
+      {/* Image Enlargement Modal */}
+      {isImageModalOpen && enlargedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+          onClick={closeImageModal}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+            {/* Loading indicator */}
+            {imageLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+              </div>
+            )}
+            
+            {/* Error state */}
+            {imageError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50 rounded-lg text-white">
+                <div className="text-4xl mb-4">⚠️</div>
+                <p className="text-lg">Failed to load image</p>
+                <button 
+                  onClick={closeImageModal}
+                  className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+            
+            {/* Main image */}
+            <img
+              src={enlargedImage}
+              alt="Enlarged view"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              onLoad={() => setImageLoading(false)}
+              onError={() => {
+                setImageLoading(false);
+                setImageError(true);
+              }}
+              style={{ display: imageLoading || imageError ? 'none' : 'block' }}
+            />
+            
+            {/* Navigation buttons */}
+            {currentMessageImages.length > 1 && !imageLoading && !imageError && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    prevImage();
+                  }}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full w-12 h-12 flex items-center justify-center text-2xl hover:bg-opacity-70 transition"
+                  disabled={currentImageIndex === 0}
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nextImage();
+                  }}
+                  className="absolute right-16 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full w-12 h-12 flex items-center justify-center text-2xl hover:bg-opacity-70 transition"
+                  disabled={currentImageIndex === currentMessageImages.length - 1}
+                >
+                  ›
+                </button>
+              </>
+            )}
+            
+            {/* Image counter */}
+            {currentMessageImages.length > 1 && !imageLoading && !imageError && (
+              <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
+                {currentImageIndex + 1} / {currentMessageImages.length}
+              </div>
+            )}
+            
+            <button
+              onClick={closeImageModal}
+              className="absolute top-4 right-4 bg-black bg-opacity-50 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl hover:bg-opacity-70 transition"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Document Modal */}
+      {isDocumentModalOpen && selectedDocument && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+          onClick={closeDocumentModal}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] bg-white rounded-lg shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center justify-center min-h-[400px]">
+              <div className="text-6xl mb-4">
+                {getFileIcon(selectedDocument.fileType)}
+              </div>
+              <h3 className="text-xl font-semibold mb-2 text-gray-800">
+                {selectedDocument.fileName}
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                {getFileExtension(selectedDocument.fileName)} • {selectedDocument.fileType}
+              </p>
+              <div className="flex gap-3">
+                <a
+                  href={selectedDocument.url}
+                  download={selectedDocument.fileName}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Download
+                </a>
+                <button
+                  onClick={closeDocumentModal}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={closeDocumentModal}
+              className="absolute top-4 right-4 bg-black bg-opacity-50 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl hover:bg-opacity-70 transition"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

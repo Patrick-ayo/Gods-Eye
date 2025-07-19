@@ -14,6 +14,12 @@ const Tesseract = require("tesseract.js");
 const axios = require("axios");
 const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
+const { CohereClient } = require("cohere-ai");
+
+// Initialize Cohere API
+const cohere = new CohereClient({
+  token: 'vuMm9IF4r9PNUueAR3FsbD4iSxAfYUf9vECBPlGH',
+});
 
 // Initialize Simple USB Monitor
 const SimpleUSBMonitor = require("./simple-usb-monitor");
@@ -93,64 +99,72 @@ app.post("/api/ollama/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-// Ollama chat endpoint
+// Image analysis endpoint for chat
+app.post("/api/ollama/analyze-image", upload.single("image"), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: "No image uploaded" });
+    
+    // Extract text from image using Tesseract OCR
+    const extractedText = await extractText(file.path, file.mimetype);
+    
+    // Create a prompt for Cohere to analyze the image content
+    const analysisPrompt = `I have extracted the following text from an image using OCR:\n\n"${extractedText}"\n\nPlease analyze this content and provide insights about what the image contains. If there's no readable text, please mention that the image appears to contain visual elements that couldn't be converted to text.`;
+    
+    // Call Cohere API for analysis
+    const response = await cohere.chat({
+      model: 'command',
+      message: analysisPrompt,
+      maxTokens: 300,
+      temperature: 0.7,
+    });
+    
+    // Clean up uploaded file
+    fs.unlinkSync(file.path);
+    
+    res.json({ 
+      analysis: response.text,
+      extractedText: extractedText,
+      filename: file.originalname
+    });
+  } catch (e) {
+    console.error("❌ Image analysis failed:", e.message);
+    res.status(500).json({ error: "Failed to analyze image" });
+  }
+});
+
+// Cohere chat endpoint
 app.post("/api/ollama/chat", async (req, res) => {
   try {
     const { messages, fileId } = req.body;
     let context = "";
     if (fileId && fileTextStore[fileId]) {
       context = `\n\n[File context: ${fileTextStore[fileId].name}]\n${fileTextStore[fileId].text}\n`;
-    }
-    // Compose prompt for Ollama
+    }    
+    // Compose prompt for Cohere
     const lastUserMsg = messages.filter((m) => m.role === "user").pop();
     const prompt = context
       ? `${context}\nUser: ${lastUserMsg.content}`
       : lastUserMsg.content;
 
-    // Call Ollama (Mistral)
-    // const ollamaRes = await axios.post(
-    //   "http://localhost:11434/api/generate",
-    //   {
-    //     model: "mistral",
-    //     prompt,
-    //     stream: false,
-    //   },
-    //   {
-    //     headers: { "Content-Type": "application/json" },
-    //   }
-    // );
-    // const data = ollamaRes.data;
-    // res.json({ answer: data.response });
+    console.log("🔄 Calling Cohere API with prompt:", prompt.substring(0, 100) + "...");
 
-    const ollamaRes = await axios.post(
-      "https://api.mistral.ai/v1/chat/completions",
-      {
-        model: "mistral-tiny",
-        messages: [
-          { role: "system", content: "You are a helpful assistant." },
-          { role: "user", content: prompt },
-        ],
-      },
-      {
-        headers: {
-          Authorization: `Bearer sk-EL2JDIwD6Wvw19UCj4YX1D0HmitiU3Wp`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    // Call Cohere API
+    const response = await cohere.chat({
+      model: 'command',
+      message: prompt,
+      maxTokens: 300,
+      temperature: 0.7,
+    });
 
-    console.log("MISTRAL KEY: EL2JDIwD6Wvw19UCj4YX1D0HmitiU3Wp");
-
-    const data = ollamaRes.data;
-    res.json({ answer: data.choices[0].message.content });
+    console.log("✅ Cohere API call successful!");
+    res.json({ answer: response.text });
   } catch (e) {
-    console.error("❌ Ollama call failed:", e.message);
-    if (e.response?.data) console.error("📄 Response body:", e.response.data);
-
-    console.log("MISTRAL KEY: EL2JDIwD6Wvw19UCj4YX1D0HmitiU3Wp");
-
-    console.log("🔑 API KEY:", process.env.MISTRAL_API_KEY);
-    res.status(500).json({ error: "Failed to contact Ollama" });
+    console.error("❌ Cohere API call failed:", e.message);
+    if (e.body) {
+      console.error("📄 Error body:", e.body);
+    }
+    res.status(500).json({ error: "Failed to contact Cohere" });
   }
 });
 

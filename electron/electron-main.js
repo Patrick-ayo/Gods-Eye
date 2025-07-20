@@ -1,7 +1,9 @@
 // electron-main.js
-const { app, BrowserWindow, Menu } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, powerMonitor } = require("electron");
 const path = require("path");
 const { fork } = require("child_process");
+const os = require("os");
+const { exec } = require("child_process");
 
 let mainWindow;
 let backendProcess;
@@ -191,6 +193,94 @@ app.on("before-quit", () => {
   if (backendProcess) {
     console.log("Killing backend process...");
     backendProcess.kill();
+  }
+});
+
+// IPC Handlers for system information
+ipcMain.handle('get-battery-info', async () => {
+  try {
+    return new Promise((resolve, reject) => {
+      // For Windows, use PowerShell to get battery info
+      const command = 'powershell -Command "Get-WmiObject -Class Win32_Battery | Select-Object EstimatedChargeRemaining, BatteryStatus | ConvertTo-Json"';
+      
+      exec(command, { timeout: 5000 }, (error, stdout, stderr) => {
+        if (error) {
+          console.error('Battery info error:', error);
+          resolve({ level: null, charging: null, supported: false });
+          return;
+        }
+        
+        try {
+          const batteryData = JSON.parse(stdout.trim());
+          const isCharging = batteryData.BatteryStatus === 2; // 2 = charging
+          const level = batteryData.EstimatedChargeRemaining;
+          
+          resolve({
+            level: level,
+            charging: isCharging,
+            supported: true
+          });
+        } catch (parseError) {
+          console.error('Battery parse error:', parseError);
+          resolve({ level: null, charging: null, supported: false });
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Battery API error:', error);
+    return { level: null, charging: null, supported: false };
+  }
+});
+
+ipcMain.handle('get-system-info', async () => {
+  try {
+    return new Promise((resolve) => {
+      // Get system information
+      const totalMem = os.totalmem();
+      const freeMem = os.freemem();
+      const usedMem = totalMem - freeMem;
+      const memUsagePercent = Math.round((usedMem / totalMem) * 100);
+      
+      // For Windows, get CPU usage via PowerShell
+      const command = 'powershell -Command "Get-Counter \\Processor(_Total)\\% Processor Time | Select-Object -ExpandProperty CounterSamples | Select-Object CookedValue"';
+      
+      exec(command, { timeout: 3000 }, (error, stdout) => {
+        let cpuUsage = null;
+        
+        if (!error) {
+          try {
+            const match = stdout.match(/([0-9.]+)/);
+            if (match) {
+              cpuUsage = Math.round(parseFloat(match[1]));
+            }
+          } catch (parseError) {
+            console.warn('CPU usage parse error:', parseError);
+          }
+        }
+        
+        resolve({
+          cpu: cpuUsage,
+          memory: {
+            used: usedMem,
+            total: totalMem,
+            free: freeMem,
+            usagePercent: memUsagePercent
+          },
+          platform: os.platform(),
+          arch: os.arch(),
+          supported: true
+        });
+      });
+    });
+  } catch (error) {
+    console.error('System info error:', error);
+    return {
+      cpu: null,
+      memory: null,
+      platform: os.platform(),
+      arch: os.arch(),
+      supported: false
+    };
   }
 });
 

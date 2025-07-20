@@ -45,5 +45,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendToBackend: (data) => ipcRenderer.send('backend-request', data),
   onBackendResponse: (callback) => {
     ipcRenderer.on('backend-response', (event, data) => callback(data));
-  }
+  },
+  
+  // System information
+  getBatteryInfo: () => ipcRenderer.invoke('get-battery-info'),
+  getSystemInfo: () => ipcRenderer.invoke('get-system-info')
 });
